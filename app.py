@@ -11,6 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from utils.ai_generator import AIGenerationError, generate_seo_content, get_client
+from utils.config import configure_runtime_secrets, get_xai_api_key
 from utils.helpers import (
     compute_quality_score,
     format_output_markdown,
@@ -20,6 +21,7 @@ from utils.helpers import (
 from utils.styling import get_custom_css
 
 load_dotenv()
+configure_runtime_secrets()
 
 
 CITY_OPTIONS = [
@@ -77,7 +79,7 @@ def _init_state() -> None:
 
 def _api_status() -> str:
     """Return API connection readiness status."""
-    key = os.getenv("XAI_API_KEY", "").strip()
+    key = get_xai_api_key()
     if not key:
         return "Not Connected (missing XAI_API_KEY)"
     try:

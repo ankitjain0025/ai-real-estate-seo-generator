@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Dict
 
 from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
+from utils.config import get_xai_api_key
 from utils.helpers import parse_ai_response
 from utils.prompts import build_system_prompt, build_user_prompt
 
@@ -18,7 +18,7 @@ class AIGenerationError(Exception):
 
 def get_client() -> OpenAI:
     """Initialize and return the xAI client."""
-    api_key = os.getenv("XAI_API_KEY", "").strip()
+    api_key = get_xai_api_key()
     if not api_key:
         raise AIGenerationError("Missing XAI_API_KEY. Please configure it in your environment.")
     return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")

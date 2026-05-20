@@ -33,22 +33,28 @@ AI-SEO-Generator/
 ├── README.md
 ├── .env.example
 ├── .gitignore
+├── .streamlit/
+│   ├── config.toml
+│   └── secrets.toml.example
 ├── assets/
 │   └── logo.png
 └── utils/
     ├── ai_generator.py
+    ├── config.py
     ├── prompts.py
     ├── helpers.py
     └── styling.py
 ```
+
+**Live repository:** https://github.com/ankitjain0025/ai-real-estate-seo-generator
 
 ## Installation
 
 1. Clone repository:
 
 ```bash
-git clone <your-repo-url>
-cd AI-SEO-Generator
+git clone https://github.com/ankitjain0025/ai-real-estate-seo-generator.git
+cd ai-real-estate-seo-generator
 ```
 
 2. Create virtual environment:
@@ -101,30 +107,29 @@ Open the local URL shown in terminal (typically `http://localhost:8501`).
 
 ## Streamlit Cloud Deployment
 
-1. Push project to GitHub.
-2. Open [Streamlit Community Cloud](https://streamlit.io/cloud).
-3. Create new app from your repository.
-4. Set main file path to `app.py`.
-5. In app settings, add secret:
-   - `XAI_API_KEY = your_actual_xai_api_key`
-6. Deploy.
+[![Deploy on Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://streamlit.io/cloud)
 
-## GitHub Deployment Workflow
+1. Open [Streamlit Community Cloud](https://streamlit.io/cloud) and sign in with GitHub.
+2. Click **Create app** and select repository:
+   `ankitjain0025/ai-real-estate-seo-generator`
+3. Set **Main file path** to `app.py`.
+4. In **Advanced settings → Secrets**, paste:
 
-1. Initialize repository if needed:
-
-```bash
-git init
-git add .
-git commit -m "feat: add production-ready AI real estate SEO generator"
+```toml
+XAI_API_KEY = "your_actual_xai_api_key"
 ```
 
-2. Create remote repository and push:
+5. Deploy and open the live app URL.
+
+Reference template: `.streamlit/secrets.toml.example`
+
+## GitHub Repository
+
+Remote is already configured:
 
 ```bash
-git remote add origin <your-repo-url>
-git branch -M main
-git push -u origin main
+git remote -v
+git push origin main
 ```
 
 ## Troubleshooting
