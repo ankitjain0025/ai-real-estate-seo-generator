@@ -355,7 +355,9 @@ def main() -> None:
             st.write("No content generated yet.")
         if st.session_state.get("last_error"):
             st.warning(st.session_state["last_error"])
-        st.info("Tip: Keep USP and nearby landmarks specific for stronger local SEO performance.")
+        st.info(
+            "Tip: Use `XAI_MODEL = grok-3-beta` in secrets. xAI API requires account credits even for beta aliases."
+        )
         st.markdown("</div>", unsafe_allow_html=True)
 
         if st.session_state.get("generated"):

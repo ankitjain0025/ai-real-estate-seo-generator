@@ -16,12 +16,12 @@ class AIGenerationError(Exception):
     """Raised when SEO content generation fails."""
 
 
-# Free / legacy-friendly models first (avoid paid flagship defaults).
+# Valid xAI aliases (see https://docs.x.ai/developers/models/grok-4.3)
 DEFAULT_MODEL_FALLBACKS: List[str] = [
     "grok-3-beta",
-    "grok-beta",
+    "grok-3-mini-beta",
+    "grok-3-mini",
     "grok-3",
-    "grok-2-1212",
 ]
 
 
@@ -51,6 +51,8 @@ def _format_api_error(exc: APIStatusError) -> str:
             error_obj = body.get("error")
             if isinstance(error_obj, dict) and error_obj.get("message"):
                 return str(error_obj["message"])
+            if isinstance(error_obj, str):
+                return error_obj
             if body.get("message"):
                 return str(body["message"])
     except Exception:
@@ -78,11 +80,25 @@ def _request_completion(client: OpenAI, model: str, payload: Dict[str, object]) 
     return content
 
 
+def _build_failure_message(failures: List[str]) -> str:
+    """Create a single actionable error from model attempts."""
+    lines = "\n".join([f"- {item}" for item in failures])
+    return (
+        "No xAI model worked for your API key.\n"
+        f"{lines}\n\n"
+        "What to do:\n"
+        "1. In Streamlit secrets set: XAI_MODEL = \"grok-3-beta\"\n"
+        "2. Reboot app after saving secrets.\n"
+        "3. Check https://console.x.ai → Billing (API credits are required).\n"
+        "4. Check https://console.x.ai → Models for enabled models on your team."
+    )
+
+
 def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[str, object]:
     """Generate SEO content with retry logic and robust error handling."""
     client = get_client()
     models = _model_candidates()
-    last_error: Exception | None = None
+    failures: List[str] = []
 
     for model in models:
         for attempt in range(1, retries + 1):
@@ -96,36 +112,46 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
                 return parsed
 
             except RateLimitError:
-                last_error = AIGenerationError("Rate limit reached. Please wait and try again.")
+                if attempt >= retries:
+                    failures.append(f"{model}: rate limit reached")
+                    break
+                time.sleep(min(2 * attempt, 5))
+                continue
+
             except APIConnectionError:
-                last_error = AIGenerationError("Network error while connecting to xAI API.")
+                if attempt >= retries:
+                    failures.append(f"{model}: network error")
+                    break
+                time.sleep(min(2 * attempt, 5))
+                continue
+
             except APIStatusError as exc:
                 detail = _format_api_error(exc)
                 if exc.status_code == 401:
                     raise AIGenerationError("Invalid API key. Please verify XAI_API_KEY.") from exc
+
                 if exc.status_code in {400, 404}:
-                    last_error = AIGenerationError(
-                        f"xAI model '{model}' rejected the request: {detail}. Trying fallback model..."
-                    )
+                    failures.append(f"{model}: {detail}")
                     break
+
                 if exc.status_code in {402, 403} or "credit" in detail.lower() or "balance" in detail.lower():
-                    last_error = AIGenerationError(
-                        f"Insufficient credits for model '{model}'. "
-                        "Use free-tier models in secrets: XAI_MODEL = \"grok-3-beta\"."
-                    )
+                    failures.append(f"{model}: insufficient credits")
                     break
+
                 if exc.status_code == 408:
-                    last_error = AIGenerationError("Request timeout from xAI API.")
-                else:
-                    last_error = AIGenerationError(f"xAI API error (HTTP {exc.status_code}): {detail}")
+                    if attempt >= retries:
+                        failures.append(f"{model}: request timeout")
+                        break
+                    time.sleep(min(2 * attempt, 5))
+                    continue
+
+                failures.append(f"{model}: HTTP {exc.status_code} - {detail}")
+                break
+
             except AIGenerationError:
                 raise
             except Exception as exc:
-                last_error = AIGenerationError(f"Unexpected generation error: {exc}")
+                failures.append(f"{model}: {exc}")
+                break
 
-            if attempt < retries:
-                time.sleep(min(2 * attempt, 5))
-
-    if last_error:
-        raise last_error
-    raise AIGenerationError("Generation failed after retries.")
+    raise AIGenerationError(_build_failure_message(failures))
