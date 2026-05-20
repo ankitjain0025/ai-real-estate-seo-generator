@@ -83,13 +83,26 @@ def _request_completion(client: OpenAI, model: str, payload: Dict[str, object]) 
 def _build_failure_message(failures: List[str]) -> str:
     """Create a single actionable error from model attempts."""
     lines = "\n".join([f"- {item}" for item in failures])
+    all_credit_errors = failures and all("insufficient credits" in item for item in failures)
+    if all_credit_errors:
+        return (
+            "Your xAI API key is valid, but the account has no credits.\n"
+            f"{lines}\n\n"
+            "Important: Names like grok-3-beta are aliases — they still use paid API credits.\n\n"
+            "Fix (required):\n"
+            "1. Open https://console.x.ai/team/default/billing\n"
+            "2. Purchase prepaid credits (or apply a promo code if you have one)\n"
+            "3. Confirm balance is above $0\n"
+            "4. Reboot your Streamlit app and generate again\n\n"
+            "If you cannot add credits, you will need a different API provider with available quota."
+        )
     return (
         "No xAI model worked for your API key.\n"
         f"{lines}\n\n"
         "What to do:\n"
         "1. In Streamlit secrets set: XAI_MODEL = \"grok-3-beta\"\n"
         "2. Reboot app after saving secrets.\n"
-        "3. Check https://console.x.ai → Billing (API credits are required).\n"
+        "3. Check https://console.x.ai → Billing\n"
         "4. Check https://console.x.ai → Models for enabled models on your team."
     )
 
@@ -135,7 +148,7 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
                     break
 
                 if exc.status_code in {402, 403} or "credit" in detail.lower() or "balance" in detail.lower():
-                    failures.append(f"{model}: insufficient credits")
+                    failures.append(f"{model}: insufficient credits — {detail}")
                     break
 
                 if exc.status_code == 408:
