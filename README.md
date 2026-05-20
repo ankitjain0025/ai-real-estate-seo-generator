@@ -138,7 +138,8 @@ git push origin main
 
 - **API not connected on Streamlit Cloud**: add `XAI_API_KEY` in App settings → Secrets (TOML), then **Reboot app**. Do not use JSON format in secrets.
 - **API not connected locally**: verify `.env` exists and contains valid `XAI_API_KEY`.
-- **HTTP 400 errors**: usually invalid/retired model slug. Use `XAI_MODEL = "grok-3-beta"` in secrets.
+- **HTTP 400 / Model not found**: use `XAI_MODEL = "grok-3-beta"` or `grok-3-mini-beta` (do not use retired slugs like `grok-2-1212`).
+- **Insufficient credits**: add credits at [console.x.ai Billing](https://console.x.ai); beta aliases still consume API credits.
 - **401 errors**: key is invalid or expired; regenerate xAI API key.
 - **Timeout/network errors**: retry; app includes built-in retry logic.
 - **Empty output**: refine USP, micro-market, and landmarks for better context.
