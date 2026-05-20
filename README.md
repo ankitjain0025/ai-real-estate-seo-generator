@@ -113,13 +113,14 @@ Open the local URL shown in terminal (typically `http://localhost:8501`).
 2. Click **Create app** and select repository:
    `ankitjain0025/ai-real-estate-seo-generator`
 3. Set **Main file path** to `app.py`.
-4. In **Advanced settings → Secrets**, paste:
+4. In **Advanced settings → Secrets**, paste exactly (TOML format):
 
 ```toml
 XAI_API_KEY = "your_actual_xai_api_key"
 ```
 
-5. Deploy and open the live app URL.
+5. Deploy, then open **Manage app → Reboot app** after saving secrets.
+6. Confirm sidebar shows **Connected**.
 
 Reference template: `.streamlit/secrets.toml.example`
 
@@ -134,7 +135,8 @@ git push origin main
 
 ## Troubleshooting
 
-- **API not connected**: verify `.env` exists and contains valid `XAI_API_KEY`.
+- **API not connected on Streamlit Cloud**: add `XAI_API_KEY` in App settings → Secrets (TOML), then **Reboot app**. Do not use JSON format in secrets.
+- **API not connected locally**: verify `.env` exists and contains valid `XAI_API_KEY`.
 - **401 errors**: key is invalid or expired; regenerate xAI API key.
 - **Timeout/network errors**: retry; app includes built-in retry logic.
 - **Empty output**: refine USP, micro-market, and landmarks for better context.

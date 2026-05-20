@@ -21,7 +21,6 @@ from utils.helpers import (
 from utils.styling import get_custom_css
 
 load_dotenv()
-configure_runtime_secrets()
 
 
 CITY_OPTIONS = [
@@ -79,14 +78,40 @@ def _init_state() -> None:
 
 def _api_status() -> str:
     """Return API connection readiness status."""
+    configure_runtime_secrets()
     key = get_xai_api_key()
     if not key:
-        return "Not Connected (missing XAI_API_KEY)"
+        return "missing"
     try:
         _ = get_client()
-        return "Connected"
+        return "connected"
+    except AIGenerationError:
+        return "invalid"
     except Exception:
-        return "Configuration Error"
+        return "invalid"
+
+
+def _api_status_message(status: str) -> str:
+    """Human-readable API status for sidebar."""
+    mapping = {
+        "connected": "Connected",
+        "missing": "Not Connected (missing XAI_API_KEY)",
+        "invalid": "Configuration Error (check API key value)",
+    }
+    return mapping.get(status, "Unknown")
+
+
+def _api_error_message(status: str) -> str:
+    """Actionable error when generation is blocked."""
+    if status == "missing":
+        return (
+            "API is not connected. Add your key in Streamlit Cloud → App settings → Secrets:\n\n"
+            "XAI_API_KEY = \"your_actual_xai_api_key\"\n\n"
+            "Then click Manage app → Reboot app."
+        )
+    if status == "invalid":
+        return "API key is present but invalid. Regenerate your xAI key and update Streamlit secrets."
+    return "API is not connected. Please configure XAI_API_KEY and try again."
 
 
 def _render_sidebar(status: str) -> None:
@@ -117,12 +142,16 @@ def _render_sidebar(status: str) -> None:
         "Built with Streamlit + Grok API for high-quality SEO and social launch communication at scale."
     )
     st.sidebar.markdown("### API Status")
-    if status == "Connected":
-        st.sidebar.success(status)
-    elif "missing" in status.lower():
-        st.sidebar.warning(status)
+    label = _api_status_message(status)
+    if status == "connected":
+        st.sidebar.success(label)
+    elif status == "missing":
+        st.sidebar.warning(label)
+        with st.sidebar.expander("Fix on Streamlit Cloud"):
+            st.code('XAI_API_KEY = "your_actual_xai_api_key"', language="toml")
+            st.caption("After saving secrets, reboot the app from Manage app.")
     else:
-        st.sidebar.error(status)
+        st.sidebar.error(label)
     st.sidebar.markdown("---")
     st.sidebar.caption("Powered by xAI Grok | Built for Indian Real Estate")
 
@@ -266,6 +295,7 @@ def _render_results(content: Dict[str, object]) -> None:
 
 def main() -> None:
     """Run Streamlit app."""
+    configure_runtime_secrets()
     st.set_page_config(
         page_title="AI Real Estate SEO Generator",
         page_icon="🏙️",
@@ -295,8 +325,8 @@ def main() -> None:
             if not valid:
                 for err in errors:
                     st.error(err)
-            elif api_status != "Connected":
-                st.error("API is not connected. Please configure XAI_API_KEY and try again.")
+            elif api_status != "connected":
+                st.error(_api_error_message(api_status))
             else:
                 with st.spinner("Crafting premium SEO content with Grok AI..."):
                     try:
