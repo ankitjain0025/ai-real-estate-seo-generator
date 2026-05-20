@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
+
+# Ensure project root is on sys.path for Streamlit Cloud imports.
+_ROOT_DIR = Path(__file__).resolve().parent
+if str(_ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(_ROOT_DIR))
 
 import streamlit as st
 from dotenv import load_dotenv
 
 from utils.ai_generator import AIGenerationError, generate_seo_content, get_client
 from utils.config import configure_runtime_secrets, get_xai_api_key
-from utils.helpers import (
-    compute_quality_score,
-    format_output_markdown,
-    format_output_txt,
-    validate_inputs,
-)
+from utils.formatting import format_output_markdown, format_output_txt
+from utils.scoring import compute_quality_score
 from utils.styling import get_custom_css
+from utils.validation import validate_inputs
 
 load_dotenv()
 
@@ -119,7 +121,7 @@ def _render_sidebar(status: str) -> None:
     logo_path = Path("assets/logo.png")
     if logo_path.exists():
         try:
-            st.sidebar.image(str(logo_path), use_container_width=True)
+            st.sidebar.image(str(logo_path), width="stretch")
         except Exception:
             st.sidebar.markdown("## 🏙️")
     else:
@@ -185,7 +187,7 @@ def _get_payload() -> Dict[str, object]:
             price_segment = st.selectbox("Price Segment", PRICE_SEGMENT_OPTIONS)
             tone = st.selectbox("Tone of Content", TONE_OPTIONS)
 
-        submitted = st.form_submit_button("Generate SEO Content", use_container_width=True)
+        submitted = st.form_submit_button("Generate SEO Content", width="stretch")
 
     payload = {
         "project_name": project_name,
@@ -284,7 +286,7 @@ def _render_results(content: Dict[str, object]) -> None:
             data=txt_data,
             file_name="real_estate_seo_content.txt",
             mime="text/plain",
-            use_container_width=True,
+            width="stretch",
         )
     with d2:
         st.download_button(
@@ -292,7 +294,7 @@ def _render_results(content: Dict[str, object]) -> None:
             data=markdown_data,
             file_name="real_estate_seo_content.md",
             mime="text/markdown",
-            use_container_width=True,
+            width="stretch",
         )
 
 

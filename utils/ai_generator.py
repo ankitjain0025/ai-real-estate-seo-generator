@@ -7,9 +7,9 @@ from typing import Dict, List
 
 from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
 
-from utils.config import get_xai_api_key, get_xai_model
-from utils.helpers import parse_ai_response
-from utils.prompts import build_system_prompt, build_user_prompt
+from .config import get_xai_api_key, get_xai_model
+from .parsing import parse_ai_response
+from .prompts import build_system_prompt, build_user_prompt
 
 
 class AIGenerationError(Exception):

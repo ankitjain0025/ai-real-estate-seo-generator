@@ -39,9 +39,15 @@ AI-SEO-Generator/
 ├── assets/
 │   └── logo.png
 └── utils/
+    ├── __init__.py
     ├── ai_generator.py
     ├── config.py
     ├── prompts.py
+    ├── schema.py
+    ├── parsing.py
+    ├── validation.py
+    ├── scoring.py
+    ├── formatting.py
     ├── helpers.py
     └── styling.py
 ```

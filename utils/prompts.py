@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Dict, List
+from typing import Dict
 
 
 def build_system_prompt() -> str:
@@ -62,22 +62,3 @@ def build_user_prompt(payload: Dict[str, object]) -> str:
     )
 
 
-def default_output() -> Dict[str, object]:
-    """Return a safe default output shape."""
-    return {
-        "seo_title": "",
-        "meta_description": "",
-        "seo_keywords": [],
-        "google_snippet": "",
-        "instagram_caption": "",
-        "linkedin_caption": "",
-        "seo_hashtags": [],
-        "blog_topics": [],
-        "short_description": "",
-        "long_form_overview": "",
-    }
-
-
-def required_keys() -> List[str]:
-    """Return required output keys."""
-    return list(default_output().keys())
