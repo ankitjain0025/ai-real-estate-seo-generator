@@ -58,8 +58,24 @@ def get_xai_api_key() -> str:
     return ""
 
 
+def get_xai_model() -> str:
+    """Return configured xAI model with a safe default."""
+    model = _clean_key(os.getenv("XAI_MODEL", "grok-4.3"))
+    return model or "grok-4.3"
+
+
 def configure_runtime_secrets() -> None:
     """Expose resolved secrets to process environment for shared modules."""
     key = get_xai_api_key()
     if key:
         os.environ["XAI_API_KEY"] = key
+
+    try:
+        import streamlit as st
+
+        if hasattr(st, "secrets") and "XAI_MODEL" in st.secrets:
+            model = _clean_key(st.secrets["XAI_MODEL"])
+            if model:
+                os.environ["XAI_MODEL"] = model
+    except Exception:
+        pass
