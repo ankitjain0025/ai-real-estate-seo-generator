@@ -59,9 +59,9 @@ def get_xai_api_key() -> str:
 
 
 def get_xai_model() -> str:
-    """Return configured xAI model with a safe default."""
-    model = _clean_key(os.getenv("XAI_MODEL", "grok-4.3"))
-    return model or "grok-4.3"
+    """Return configured xAI model (defaults to free-tier beta)."""
+    model = _clean_key(os.getenv("XAI_MODEL", "grok-3-beta"))
+    return model or "grok-3-beta"
 
 
 def configure_runtime_secrets() -> None:

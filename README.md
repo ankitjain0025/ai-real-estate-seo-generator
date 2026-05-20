@@ -95,7 +95,7 @@ The app uses:
 
 - `XAI_API_KEY` for xAI authentication
 - Base URL: `https://api.x.ai/v1`
-- Model: `grok-4.3` (override with `XAI_MODEL` if needed)
+- Model: `grok-3-beta` (free/legacy-friendly default; override with `XAI_MODEL`)
 
 ## Run Locally
 
@@ -117,7 +117,7 @@ Open the local URL shown in terminal (typically `http://localhost:8501`).
 
 ```toml
 XAI_API_KEY = "your_actual_xai_api_key"
-XAI_MODEL = "grok-4.3"
+XAI_MODEL = "grok-3-beta"
 ```
 
 5. Deploy, then open **Manage app → Reboot app** after saving secrets.
@@ -138,7 +138,7 @@ git push origin main
 
 - **API not connected on Streamlit Cloud**: add `XAI_API_KEY` in App settings → Secrets (TOML), then **Reboot app**. Do not use JSON format in secrets.
 - **API not connected locally**: verify `.env` exists and contains valid `XAI_API_KEY`.
-- **HTTP 400 errors**: usually invalid/retired model slug. Use `XAI_MODEL = "grok-4.3"` in secrets.
+- **HTTP 400 errors**: usually invalid/retired model slug. Use `XAI_MODEL = "grok-3-beta"` in secrets.
 - **401 errors**: key is invalid or expired; regenerate xAI API key.
 - **Timeout/network errors**: retry; app includes built-in retry logic.
 - **Empty output**: refine USP, micro-market, and landmarks for better context.

@@ -148,7 +148,10 @@ def _render_sidebar(status: str) -> None:
     elif status == "missing":
         st.sidebar.warning(label)
         with st.sidebar.expander("Fix on Streamlit Cloud"):
-            st.code('XAI_API_KEY = "your_actual_xai_api_key"', language="toml")
+            st.code(
+                'XAI_API_KEY = "your_actual_xai_api_key"\nXAI_MODEL = "grok-3-beta"',
+                language="toml",
+            )
             st.caption("After saving secrets, reboot the app from Manage app.")
     else:
         st.sidebar.error(label)

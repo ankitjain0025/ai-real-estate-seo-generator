@@ -16,10 +16,12 @@ class AIGenerationError(Exception):
     """Raised when SEO content generation fails."""
 
 
+# Free / legacy-friendly models first (avoid paid flagship defaults).
 DEFAULT_MODEL_FALLBACKS: List[str] = [
-    "grok-4.3",
-    "grok-4-1-fast-non-reasoning",
+    "grok-3-beta",
+    "grok-beta",
     "grok-3",
+    "grok-2-1212",
 ]
 
 
@@ -104,6 +106,12 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
                 if exc.status_code in {400, 404}:
                     last_error = AIGenerationError(
                         f"xAI model '{model}' rejected the request: {detail}. Trying fallback model..."
+                    )
+                    break
+                if exc.status_code in {402, 403} or "credit" in detail.lower() or "balance" in detail.lower():
+                    last_error = AIGenerationError(
+                        f"Insufficient credits for model '{model}'. "
+                        "Use free-tier models in secrets: XAI_MODEL = \"grok-3-beta\"."
                     )
                     break
                 if exc.status_code == 408:
