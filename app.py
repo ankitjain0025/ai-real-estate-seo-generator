@@ -16,7 +16,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from utils.ai_generator import AIGenerationError, generate_seo_content, get_client
-from utils.config import configure_runtime_secrets, get_xai_api_key
+from utils.config import configure_runtime_secrets, get_gemini_api_key
 from utils.formatting import format_output_markdown, format_output_txt
 from utils.scoring import compute_quality_score
 from utils.styling import get_custom_css
@@ -81,7 +81,7 @@ def _init_state() -> None:
 def _api_status() -> str:
     """Return API connection readiness status."""
     configure_runtime_secrets()
-    key = get_xai_api_key()
+    key = get_gemini_api_key()
     if not key:
         return "missing"
     try:
@@ -97,7 +97,7 @@ def _api_status_message(status: str) -> str:
     """Human-readable API status for sidebar."""
     mapping = {
         "connected": "Connected",
-        "missing": "Not Connected (missing XAI_API_KEY)",
+        "missing": "Not Connected (missing GEMINI_API_KEY)",
         "invalid": "Configuration Error (check API key value)",
     }
     return mapping.get(status, "Unknown")
@@ -108,12 +108,15 @@ def _api_error_message(status: str) -> str:
     if status == "missing":
         return (
             "API is not connected. Add your key in Streamlit Cloud → App settings → Secrets:\n\n"
-            "XAI_API_KEY = \"your_actual_xai_api_key\"\n\n"
+            'GEMINI_API_KEY = "your_actual_gemini_api_key"\n\n'
             "Then click Manage app → Reboot app."
         )
     if status == "invalid":
-        return "API key is present but invalid. Regenerate your xAI key and update Streamlit secrets."
-    return "API is not connected. Please configure XAI_API_KEY and try again."
+        return (
+            "API key is present but invalid. "
+            "Generate a new key at https://aistudio.google.com/app/apikey and update Streamlit secrets."
+        )
+    return "API is not connected. Please configure GEMINI_API_KEY and try again."
 
 
 def _render_sidebar(status: str) -> None:
@@ -121,7 +124,7 @@ def _render_sidebar(status: str) -> None:
     logo_path = Path("assets/logo.png")
     if logo_path.exists():
         try:
-            st.sidebar.image(str(logo_path), width="stretch")
+            st.sidebar.image(str(logo_path), use_container_width=True)
         except Exception:
             st.sidebar.markdown("## 🏙️")
     else:
@@ -141,7 +144,7 @@ def _render_sidebar(status: str) -> None:
     )
     st.sidebar.markdown("### About")
     st.sidebar.markdown(
-        "Built with Streamlit + Grok API for high-quality SEO and social launch communication at scale."
+        "Built with Streamlit + Google Gemini for high-quality SEO and social launch communication at scale."
     )
     st.sidebar.markdown("### API Status")
     label = _api_status_message(status)
@@ -151,14 +154,14 @@ def _render_sidebar(status: str) -> None:
         st.sidebar.warning(label)
         with st.sidebar.expander("Fix on Streamlit Cloud"):
             st.code(
-                'XAI_API_KEY = "your_actual_xai_api_key"\nXAI_MODEL = "grok-3-beta"',
+                'GEMINI_API_KEY = "your_actual_gemini_api_key"',
                 language="toml",
             )
             st.caption("After saving secrets, reboot the app from Manage app.")
     else:
         st.sidebar.error(label)
     st.sidebar.markdown("---")
-    st.sidebar.caption("Powered by xAI Grok | Built for Indian Real Estate")
+    st.sidebar.caption("Powered by Google Gemini 2.5 Flash | Built for Indian Real Estate")
 
 
 def _get_payload() -> Dict[str, object]:
@@ -187,7 +190,7 @@ def _get_payload() -> Dict[str, object]:
             price_segment = st.selectbox("Price Segment", PRICE_SEGMENT_OPTIONS)
             tone = st.selectbox("Tone of Content", TONE_OPTIONS)
 
-        submitted = st.form_submit_button("Generate SEO Content", width="stretch")
+        submitted = st.form_submit_button("Generate SEO Content", use_container_width=True)
 
     payload = {
         "project_name": project_name,
@@ -286,7 +289,7 @@ def _render_results(content: Dict[str, object]) -> None:
             data=txt_data,
             file_name="real_estate_seo_content.txt",
             mime="text/plain",
-            width="stretch",
+            use_container_width=True,
         )
     with d2:
         st.download_button(
@@ -294,7 +297,7 @@ def _render_results(content: Dict[str, object]) -> None:
             data=markdown_data,
             file_name="real_estate_seo_content.md",
             mime="text/markdown",
-            width="stretch",
+            use_container_width=True,
         )
 
 
@@ -333,7 +336,7 @@ def main() -> None:
             elif api_status != "connected":
                 st.error(_api_error_message(api_status))
             else:
-                with st.spinner("Crafting premium SEO content with Grok AI..."):
+                with st.spinner("Crafting premium SEO content with Gemini AI..."):
                     try:
                         generated = generate_seo_content(payload)
                         st.session_state["generated"] = generated
@@ -358,7 +361,8 @@ def main() -> None:
         if st.session_state.get("last_error"):
             st.warning(st.session_state["last_error"])
         st.info(
-            "Tip: Use `XAI_MODEL = grok-3-beta` in secrets. xAI API requires account credits even for beta aliases."
+            "Tip: Add GEMINI_API_KEY to Streamlit secrets. "
+            "Get a free key at https://aistudio.google.com/app/apikey"
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
