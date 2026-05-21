@@ -1,11 +1,12 @@
-"""AI generation module using Google Gemini API."""
+"""AI generation module using Google Gemini API (google-genai SDK)."""
 
 from __future__ import annotations
 
 import time
 from typing import Dict, List
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 from .config import get_gemini_api_key, get_gemini_model
 from .parsing import parse_ai_response
@@ -16,47 +17,38 @@ class AIGenerationError(Exception):
     """Raised when SEO content generation fails."""
 
 
-def _configure_genai() -> None:
-    """Configure the Gemini SDK with the resolved API key."""
+def get_client() -> genai.Client:
+    """Initialize and return a configured Gemini client."""
     api_key = get_gemini_api_key()
     if not api_key:
         raise AIGenerationError(
             "Missing GEMINI_API_KEY. Please add it to your Streamlit secrets or .env file."
         )
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 
-def get_client() -> genai.GenerativeModel:
-    """Initialize and return a configured Gemini GenerativeModel."""
-    _configure_genai()
-    return genai.GenerativeModel(get_gemini_model())
-
-
-def _request_completion(model: genai.GenerativeModel, payload: Dict[str, object]) -> str:
+def _request_completion(client: genai.Client, payload: Dict[str, object]) -> str:
     """Call Gemini generate_content and return the response text."""
-    system_prompt = build_system_prompt()
-    user_prompt = build_user_prompt(payload)
-
-    # Combine system + user prompt as a single turn (Gemini 2.5 Flash supports
-    # system_instruction natively; fall back to prefixing if unavailable).
-    try:
-        response = model.generate_content(
-            user_prompt,
-            generation_config=genai.GenerationConfig(temperature=0.7),
-        )
-    except Exception:
-        # Re-raise so the retry loop can categorise the error.
-        raise
+    response = client.models.generate_content(
+        model=get_gemini_model(),
+        contents=build_user_prompt(payload),
+        config=types.GenerateContentConfig(
+            system_instruction=build_system_prompt(),
+            temperature=0.7,
+            response_mime_type="application/json",
+        ),
+    )
 
     text = ""
     try:
         text = response.text
     except Exception:
-        # response.text raises ValueError when the response is blocked.
         pass
 
     if not text or not text.strip():
-        raise AIGenerationError("Empty response from Gemini. The request may have been blocked by safety filters.")
+        raise AIGenerationError(
+            "Empty response from Gemini. The request may have been blocked by safety filters."
+        )
 
     return text
 
@@ -64,7 +56,7 @@ def _request_completion(model: genai.GenerativeModel, payload: Dict[str, object]
 def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[str, object]:
     """Generate SEO content with retry logic and robust error handling."""
     try:
-        model = get_client()
+        client = get_client()
     except AIGenerationError:
         raise
 
@@ -73,7 +65,7 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
 
     for attempt in range(1, retries + 1):
         try:
-            content_text = _request_completion(model, payload)
+            content_text = _request_completion(client, payload)
             parsed = parse_ai_response(content_text)
 
             if not parsed.get("seo_title") or not parsed.get("meta_description"):
@@ -87,7 +79,6 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
         except Exception as exc:
             error_str = str(exc)
 
-            # Rate limit / quota errors — wait and retry
             if any(kw in error_str.lower() for kw in ("quota", "rate", "resource_exhausted", "429")):
                 if attempt >= retries:
                     failures.append(f"{model_name}: rate limit / quota exceeded — {error_str}")
@@ -95,14 +86,12 @@ def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[s
                 time.sleep(min(2 * attempt, 6))
                 continue
 
-            # Auth errors — fail fast
             if any(kw in error_str.lower() for kw in ("api_key", "invalid", "401", "403", "permission")):
                 raise AIGenerationError(
                     f"Invalid or unauthorised GEMINI_API_KEY. "
                     f"Verify your key at https://aistudio.google.com/app/apikey.\n\nDetail: {error_str}"
                 ) from exc
 
-            # Network errors — retry
             if any(kw in error_str.lower() for kw in ("connection", "timeout", "network", "unavailable")):
                 if attempt >= retries:
                     failures.append(f"{model_name}: network error — {error_str}")

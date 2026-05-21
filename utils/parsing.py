@@ -9,6 +9,15 @@ from typing import Dict, List
 from .schema import default_output, required_keys
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Remove ```json ... ``` or ``` ... ``` wrappers that Gemini adds."""
+    # Remove opening fence with optional language tag
+    text = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.IGNORECASE)
+    # Remove closing fence
+    text = re.sub(r"\s*```$", "", text.strip())
+    return text.strip()
+
+
 def _extract_first_json_blob(text: str) -> str:
     """Attempt to extract the first JSON object from plain text."""
     match = re.search(r"\{.*\}", text, flags=re.DOTALL)
@@ -44,11 +53,23 @@ def parse_ai_response(raw_text: str) -> Dict[str, object]:
     if not raw_text or not raw_text.strip():
         raise ValueError("Empty response from AI service.")
 
-    blob = _extract_first_json_blob(raw_text)
+    # Step 1: strip markdown code fences (Gemini often wraps in ```json)
+    cleaned = _strip_markdown_fences(raw_text)
+
+    # Step 2: try parsing directly
+    data = None
     try:
-        data = json.loads(blob)
-    except json.JSONDecodeError as exc:
-        raise ValueError("AI returned malformed JSON content.") from exc
+        data = json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # Step 3: fallback — extract first {...} blob from the text
+    if data is None:
+        blob = _extract_first_json_blob(cleaned)
+        try:
+            data = json.loads(blob)
+        except json.JSONDecodeError as exc:
+            raise ValueError("AI returned malformed JSON content.") from exc
 
     if not isinstance(data, dict):
         raise ValueError("AI response format is invalid.")

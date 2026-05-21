@@ -34,6 +34,8 @@ def build_system_prompt() -> str:
         "- meta_description should target 140-160 characters.\n"
         "- Keep language premium, concise, and conversion-focused.\n"
         "- Never include markdown in JSON values.\n"
+        "- Never wrap your response in markdown code fences (no ```json or ```).\n"
+        "- Return raw JSON only — no preamble, no explanation, no formatting.\n"
         "- Never include keys outside the required schema."
     )
 
@@ -58,7 +60,6 @@ def build_user_prompt(payload: Dict[str, object]) -> str:
         "Generate a complete SEO and social content pack for this Indian real estate launch.\n\n"
         f"Project context:\n{json.dumps(context, indent=2, ensure_ascii=True)}\n\n"
         "Ensure the content is market-ready for developers and marketing teams. "
-        "Use premium Indian real estate terminology naturally."
+        "Use premium Indian real estate terminology naturally. "
+        "Return raw JSON only — no markdown fences, no extra text before or after the JSON object."
     )
-
-
