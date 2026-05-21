@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Iterable, Tuple
 
 
 def _clean_key(value: object) -> str:
@@ -16,66 +15,46 @@ def _clean_key(value: object) -> str:
     return text
 
 
-def _secret_candidates() -> Iterable[Tuple[str, ...]]:
-    """Supported secret lookup paths (root and nested)."""
-    return (
-        ("XAI_API_KEY",),
-        ("xai_api_key",),
-        ("xai", "api_key"),
-        ("xai", "API_KEY"),
-        ("xai", "XAI_API_KEY"),
-        ("secrets", "XAI_API_KEY"),
-    )
-
-
-def _read_nested_secret(secrets: object, path: Tuple[str, ...]) -> str:
-    """Read a nested Streamlit secret path safely."""
-    node = secrets
-    for part in path:
-        if node is None or part not in node:
-            return ""
-        node = node[part]
-    return _clean_key(node)
-
-
-def get_xai_api_key() -> str:
-    """Resolve xAI API key from environment or Streamlit secrets."""
-    env_key = _clean_key(os.getenv("XAI_API_KEY", ""))
-    if env_key and env_key != "your_xai_api_key_here":
-        return env_key
-
+def get_gemini_api_key() -> str:
+    """Resolve Gemini API key from Streamlit secrets or environment variable."""
+    # 1. Streamlit secrets (Cloud / local secrets.toml)
     try:
         import streamlit as st
 
-        secrets = st.secrets
-        for path in _secret_candidates():
-            value = _read_nested_secret(secrets, path)
-            if value and value != "your_xai_api_key_here":
+        for key_name in ("GEMINI_API_KEY", "gemini_api_key"):
+            try:
+                value = _clean_key(st.secrets[key_name])
+                if value and value != "your_gemini_api_key_here":
+                    return value
+            except (KeyError, AttributeError):
+                pass
+
+        # Nested [gemini] section
+        try:
+            value = _clean_key(st.secrets["gemini"]["api_key"])
+            if value and value != "your_gemini_api_key_here":
                 return value
+        except (KeyError, AttributeError, TypeError):
+            pass
+
     except Exception:
         pass
+
+    # 2. Environment variable fallback (local .env)
+    env_key = _clean_key(os.getenv("GEMINI_API_KEY", ""))
+    if env_key and env_key != "your_gemini_api_key_here":
+        return env_key
 
     return ""
 
 
-def get_xai_model() -> str:
-    """Return configured xAI model (defaults to free-tier beta)."""
-    model = _clean_key(os.getenv("XAI_MODEL", "grok-3-beta"))
-    return model or "grok-3-beta"
+def get_gemini_model() -> str:
+    """Return the configured Gemini model name."""
+    return "gemini-2.5-flash"
 
 
 def configure_runtime_secrets() -> None:
     """Expose resolved secrets to process environment for shared modules."""
-    key = get_xai_api_key()
+    key = get_gemini_api_key()
     if key:
-        os.environ["XAI_API_KEY"] = key
-
-    try:
-        import streamlit as st
-
-        if hasattr(st, "secrets") and "XAI_MODEL" in st.secrets:
-            model = _clean_key(st.secrets["XAI_MODEL"])
-            if model:
-                os.environ["XAI_MODEL"] = model
-    except Exception:
-        pass
+        os.environ["GEMINI_API_KEY"] = key

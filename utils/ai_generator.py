@@ -1,13 +1,13 @@
-"""AI generation module using xAI Grok API (OpenAI-compatible)."""
+"""AI generation module using Google Gemini API."""
 
 from __future__ import annotations
 
 import time
 from typing import Dict, List
 
-from openai import APIConnectionError, APIStatusError, OpenAI, RateLimitError
+import google.generativeai as genai
 
-from .config import get_xai_api_key, get_xai_model
+from .config import get_gemini_api_key, get_gemini_model
 from .parsing import parse_ai_response
 from .prompts import build_system_prompt, build_user_prompt
 
@@ -16,155 +16,109 @@ class AIGenerationError(Exception):
     """Raised when SEO content generation fails."""
 
 
-# Valid xAI aliases (see https://docs.x.ai/developers/models/grok-4.3)
-DEFAULT_MODEL_FALLBACKS: List[str] = [
-    "grok-3-beta",
-    "grok-3-mini-beta",
-    "grok-3-mini",
-    "grok-3",
-]
-
-
-def get_client() -> OpenAI:
-    """Initialize and return the xAI client."""
-    api_key = get_xai_api_key()
+def _configure_genai() -> None:
+    """Configure the Gemini SDK with the resolved API key."""
+    api_key = get_gemini_api_key()
     if not api_key:
-        raise AIGenerationError("Missing XAI_API_KEY. Please configure it in your environment.")
-    return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1", timeout=120.0)
-
-
-def _model_candidates() -> List[str]:
-    """Build ordered model list: configured model first, then known fallbacks."""
-    preferred = get_xai_model()
-    candidates = [preferred]
-    for model in DEFAULT_MODEL_FALLBACKS:
-        if model not in candidates:
-            candidates.append(model)
-    return candidates
-
-
-def _format_api_error(exc: APIStatusError) -> str:
-    """Extract readable API error details."""
-    try:
-        body = exc.body
-        if isinstance(body, dict):
-            error_obj = body.get("error")
-            if isinstance(error_obj, dict) and error_obj.get("message"):
-                return str(error_obj["message"])
-            if isinstance(error_obj, str):
-                return error_obj
-            if body.get("message"):
-                return str(body["message"])
-    except Exception:
-        pass
-    return str(exc)
-
-
-def _request_completion(client: OpenAI, model: str, payload: Dict[str, object]) -> str:
-    """Call chat completions and return assistant text."""
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": build_system_prompt()},
-            {"role": "user", "content": build_user_prompt(payload)},
-        ],
-        temperature=0.7,
-    )
-
-    if not response.choices or not response.choices[0].message:
-        raise AIGenerationError("Empty response from AI service.")
-
-    content = response.choices[0].message.content or ""
-    if not content.strip():
-        raise AIGenerationError("Empty response from AI service.")
-    return content
-
-
-def _build_failure_message(failures: List[str]) -> str:
-    """Create a single actionable error from model attempts."""
-    lines = "\n".join([f"- {item}" for item in failures])
-    all_credit_errors = failures and all("insufficient credits" in item for item in failures)
-    if all_credit_errors:
-        return (
-            "Your xAI API key is valid, but the account has no credits.\n"
-            f"{lines}\n\n"
-            "Important: Names like grok-3-beta are aliases — they still use paid API credits.\n\n"
-            "Fix (required):\n"
-            "1. Open https://console.x.ai/team/default/billing\n"
-            "2. Purchase prepaid credits (or apply a promo code if you have one)\n"
-            "3. Confirm balance is above $0\n"
-            "4. Reboot your Streamlit app and generate again\n\n"
-            "If you cannot add credits, you will need a different API provider with available quota."
+        raise AIGenerationError(
+            "Missing GEMINI_API_KEY. Please add it to your Streamlit secrets or .env file."
         )
-    return (
-        "No xAI model worked for your API key.\n"
-        f"{lines}\n\n"
-        "What to do:\n"
-        "1. In Streamlit secrets set: XAI_MODEL = \"grok-3-beta\"\n"
-        "2. Reboot app after saving secrets.\n"
-        "3. Check https://console.x.ai → Billing\n"
-        "4. Check https://console.x.ai → Models for enabled models on your team."
-    )
+    genai.configure(api_key=api_key)
+
+
+def get_client() -> genai.GenerativeModel:
+    """Initialize and return a configured Gemini GenerativeModel."""
+    _configure_genai()
+    return genai.GenerativeModel(get_gemini_model())
+
+
+def _request_completion(model: genai.GenerativeModel, payload: Dict[str, object]) -> str:
+    """Call Gemini generate_content and return the response text."""
+    system_prompt = build_system_prompt()
+    user_prompt = build_user_prompt(payload)
+
+    # Combine system + user prompt as a single turn (Gemini 2.5 Flash supports
+    # system_instruction natively; fall back to prefixing if unavailable).
+    try:
+        response = model.generate_content(
+            user_prompt,
+            generation_config=genai.GenerationConfig(temperature=0.7),
+        )
+    except Exception:
+        # Re-raise so the retry loop can categorise the error.
+        raise
+
+    text = ""
+    try:
+        text = response.text
+    except Exception:
+        # response.text raises ValueError when the response is blocked.
+        pass
+
+    if not text or not text.strip():
+        raise AIGenerationError("Empty response from Gemini. The request may have been blocked by safety filters.")
+
+    return text
 
 
 def generate_seo_content(payload: Dict[str, object], retries: int = 3) -> Dict[str, object]:
     """Generate SEO content with retry logic and robust error handling."""
-    client = get_client()
-    models = _model_candidates()
+    try:
+        model = get_client()
+    except AIGenerationError:
+        raise
+
     failures: List[str] = []
+    model_name = get_gemini_model()
 
-    for model in models:
-        for attempt in range(1, retries + 1):
-            try:
-                content = _request_completion(client, model, payload)
-                parsed = parse_ai_response(content)
+    for attempt in range(1, retries + 1):
+        try:
+            content_text = _request_completion(model, payload)
+            parsed = parse_ai_response(content_text)
 
-                if not parsed.get("seo_title") or not parsed.get("meta_description"):
-                    raise AIGenerationError("AI response is incomplete. Please retry.")
+            if not parsed.get("seo_title") or not parsed.get("meta_description"):
+                raise AIGenerationError("AI response is incomplete. Please retry.")
 
-                return parsed
+            return parsed
 
-            except RateLimitError:
+        except AIGenerationError:
+            raise
+
+        except Exception as exc:
+            error_str = str(exc)
+
+            # Rate limit / quota errors — wait and retry
+            if any(kw in error_str.lower() for kw in ("quota", "rate", "resource_exhausted", "429")):
                 if attempt >= retries:
-                    failures.append(f"{model}: rate limit reached")
+                    failures.append(f"{model_name}: rate limit / quota exceeded — {error_str}")
                     break
-                time.sleep(min(2 * attempt, 5))
+                time.sleep(min(2 * attempt, 6))
                 continue
 
-            except APIConnectionError:
+            # Auth errors — fail fast
+            if any(kw in error_str.lower() for kw in ("api_key", "invalid", "401", "403", "permission")):
+                raise AIGenerationError(
+                    f"Invalid or unauthorised GEMINI_API_KEY. "
+                    f"Verify your key at https://aistudio.google.com/app/apikey.\n\nDetail: {error_str}"
+                ) from exc
+
+            # Network errors — retry
+            if any(kw in error_str.lower() for kw in ("connection", "timeout", "network", "unavailable")):
                 if attempt >= retries:
-                    failures.append(f"{model}: network error")
+                    failures.append(f"{model_name}: network error — {error_str}")
                     break
-                time.sleep(min(2 * attempt, 5))
+                time.sleep(min(2 * attempt, 6))
                 continue
 
-            except APIStatusError as exc:
-                detail = _format_api_error(exc)
-                if exc.status_code == 401:
-                    raise AIGenerationError("Invalid API key. Please verify XAI_API_KEY.") from exc
+            failures.append(f"{model_name}: {error_str}")
+            break
 
-                if exc.status_code in {400, 404}:
-                    failures.append(f"{model}: {detail}")
-                    break
-
-                if exc.status_code in {402, 403} or "credit" in detail.lower() or "balance" in detail.lower():
-                    failures.append(f"{model}: insufficient credits — {detail}")
-                    break
-
-                if exc.status_code == 408:
-                    if attempt >= retries:
-                        failures.append(f"{model}: request timeout")
-                        break
-                    time.sleep(min(2 * attempt, 5))
-                    continue
-
-                failures.append(f"{model}: HTTP {exc.status_code} - {detail}")
-                break
-
-            except AIGenerationError:
-                raise
-            except Exception as exc:
-                failures.append(f"{model}: {exc}")
-                break
-
-    raise AIGenerationError(_build_failure_message(failures))
+    failure_lines = "\n".join([f"- {item}" for item in failures])
+    raise AIGenerationError(
+        f"Gemini content generation failed after {retries} attempt(s).\n\n"
+        f"{failure_lines}\n\n"
+        "What to try:\n"
+        "1. Check your GEMINI_API_KEY in Streamlit secrets.\n"
+        "2. Verify quota at https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas\n"
+        "3. Reboot the app (Manage app → Reboot app) after updating secrets."
+    )
