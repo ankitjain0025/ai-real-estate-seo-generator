@@ -65,6 +65,97 @@ html, body, [class*="css"]  {
     font-size: 0.84rem;
 }
 
+/* ── Keyword table ── */
+.kw-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+    margin-top: 0.5rem;
+}
+
+.kw-table th {
+    background: #0f355f;
+    color: #f7fbff;
+    padding: 0.5rem 0.7rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #1f4f85;
+}
+
+.kw-table td {
+    padding: 0.45rem 0.7rem;
+    border-bottom: 1px solid #e4ecf4;
+    vertical-align: middle;
+}
+
+.kw-table tr:hover td {
+    background: #f0f5fb;
+}
+
+.kw-table tr:nth-child(even) td {
+    background: #f8fafe;
+}
+
+.kw-table tr:nth-child(even):hover td {
+    background: #eef4fb;
+}
+
+/* Score bar */
+.score-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 110px;
+}
+
+.score-bar-bg {
+    flex: 1;
+    height: 8px;
+    background: #dbe4f0;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.score-bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.4s ease;
+}
+
+.score-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 28px;
+    color: #10233f;
+}
+
+/* Difficulty badges */
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.badge-low    { background: #d1fae5; color: #065f46; }
+.badge-medium { background: #fef3c7; color: #92400e; }
+.badge-high   { background: #fee2e2; color: #991b1b; }
+
+/* Intent badges */
+.intent-info   { background: #dbeafe; color: #1e40af; }
+.intent-comm   { background: #ede9fe; color: #5b21b6; }
+.intent-trans  { background: #dcfce7; color: #166534; }
+
+/* Suggestion text */
+.kw-suggestion {
+    color: #4b6a8a;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
 .stButton > button {
     border-radius: 12px !important;
     border: 1px solid #214e84 !important;
@@ -95,19 +186,8 @@ html, body, [class*="css"]  {
     margin-bottom: 0.4rem;
 }
 
-.seo-indicator-good {
-    color: #0a7f3f;
-    font-weight: 700;
-}
-
-.seo-indicator-mid {
-    color: #b56b0a;
-    font-weight: 700;
-}
-
-.seo-indicator-low {
-    color: #b01d1d;
-    font-weight: 700;
-}
+.seo-indicator-good { color: #0a7f3f; font-weight: 700; }
+.seo-indicator-mid  { color: #b56b0a; font-weight: 700; }
+.seo-indicator-low  { color: #b01d1d; font-weight: 700; }
 </style>
 """

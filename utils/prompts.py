@@ -19,7 +19,16 @@ def build_system_prompt() -> str:
         "{\n"
         '  "seo_title": string,\n'
         '  "meta_description": string,\n'
-        '  "seo_keywords": [string, ...],\n'
+        '  "seo_keywords": [\n'
+        '    {\n'
+        '      "keyword": string,\n'
+        '      "score": integer (1-100, higher = more valuable/relevant),\n'
+        '      "difficulty": "Low" | "Medium" | "High",\n'
+        '      "intent": "Informational" | "Commercial" | "Transactional",\n'
+        '      "suggestion": string (one actionable tip, max 10 words)\n'
+        '    },\n'
+        '    ...\n'
+        '  ],\n'
         '  "google_snippet": string,\n'
         '  "instagram_caption": string,\n'
         '  "linkedin_caption": string,\n'
@@ -28,9 +37,16 @@ def build_system_prompt() -> str:
         '  "short_description": string,\n'
         '  "long_form_overview": string\n'
         "}\n"
-        "Rules:\n"
-        "- seo_hashtags must contain exactly 25 entries.\n"
-        "- blog_topics must contain exactly 10 entries.\n"
+        "Rules for seo_keywords:\n"
+        "- Generate exactly 15 keyword objects.\n"
+        "- Score reflects combined search volume potential + project relevance (1-100).\n"
+        "- Difficulty: Low = long-tail, niche, easy to rank. Medium = some competition. High = dominated by portals.\n"
+        "- Intent: Informational = research phase. Commercial = comparing options. Transactional = ready to buy/visit.\n"
+        "- Return keywords SORTED by score descending (highest first).\n"
+        "- suggestion must be a single actionable SEO tip for that keyword (e.g. 'Use in page H1 tag').\n"
+        "Other rules:\n"
+        "- seo_hashtags must contain exactly 25 string entries.\n"
+        "- blog_topics must contain exactly 10 string entries.\n"
         "- meta_description should target 140-160 characters.\n"
         "- Keep language premium, concise, and conversion-focused.\n"
         "- Never include markdown in JSON values.\n"
@@ -61,5 +77,6 @@ def build_user_prompt(payload: Dict[str, object]) -> str:
         f"Project context:\n{json.dumps(context, indent=2, ensure_ascii=True)}\n\n"
         "Ensure the content is market-ready for developers and marketing teams. "
         "Use premium Indian real estate terminology naturally. "
+        "For seo_keywords: score each keyword 1-100, assign difficulty and intent, sort by score descending. "
         "Return raw JSON only — no markdown fences, no extra text before or after the JSON object."
     )
