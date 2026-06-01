@@ -7,7 +7,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
-# Ensure project root is on sys.path for Streamlit Cloud imports.
 _ROOT_DIR = Path(__file__).resolve().parent
 if str(_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(_ROOT_DIR))
@@ -24,49 +23,22 @@ from utils.validation import validate_inputs
 
 load_dotenv()
 
-
 CITY_OPTIONS = [
-    "Mumbai",
-    "Thane",
-    "Navi Mumbai",
-    "Pune",
-    "Bangalore",
-    "Hyderabad",
-    "Chennai",
-    "Delhi NCR",
-    "Ahmedabad",
+    "Mumbai", "Thane", "Navi Mumbai", "Pune", "Bangalore",
+    "Hyderabad", "Chennai", "Delhi NCR", "Ahmedabad",
 ]
-
 PROJECT_TYPE_OPTIONS = ["Residential", "Commercial", "Mixed Use", "Retail", "Township"]
-
 CONFIG_OPTIONS = ["Studio", "1BHK", "2BHK", "3BHK", "4BHK", "Penthouse", "Office", "Retail Shop"]
-
 BRAND_POSITION_OPTIONS = [
-    "Luxury",
-    "Ultra Luxury",
-    "Affordable Premium",
-    "Family-Centric",
-    "Investor-Focused",
-    "Smart Living",
-    "Corporate Commercial",
+    "Luxury", "Ultra Luxury", "Affordable Premium", "Family-Centric",
+    "Investor-Focused", "Smart Living", "Corporate Commercial",
 ]
-
-TARGET_AUDIENCE_OPTIONS = [
-    "Families",
-    "Investors",
-    "Working Professionals",
-    "NRIs",
-    "Millennials",
-    "Businesses",
-]
-
+TARGET_AUDIENCE_OPTIONS = ["Families", "Investors", "Working Professionals", "NRIs", "Millennials", "Businesses"]
 PRICE_SEGMENT_OPTIONS = ["Affordable", "Mid Segment", "Premium", "Luxury", "Ultra Luxury"]
-
 TONE_OPTIONS = ["Premium", "Luxury", "Modern", "Aspirational", "Corporate", "Investor-focused"]
 
 
 def _init_state() -> None:
-    """Initialize Streamlit session state defaults."""
     defaults = {
         "generated": None,
         "last_payload": None,
@@ -79,7 +51,6 @@ def _init_state() -> None:
 
 
 def _api_status() -> str:
-    """Return API connection readiness status."""
     configure_runtime_secrets()
     key = get_gemini_api_key()
     if not key:
@@ -94,7 +65,6 @@ def _api_status() -> str:
 
 
 def _api_status_message(status: str) -> str:
-    """Human-readable API status for sidebar."""
     mapping = {
         "connected": "Connected",
         "missing": "Not Connected (missing GEMINI_API_KEY)",
@@ -104,7 +74,6 @@ def _api_status_message(status: str) -> str:
 
 
 def _api_error_message(status: str) -> str:
-    """Actionable error when generation is blocked."""
     if status == "missing":
         return (
             "API is not connected. Add your key in Streamlit Cloud → App settings → Secrets:\n\n"
@@ -120,7 +89,6 @@ def _api_error_message(status: str) -> str:
 
 
 def _render_sidebar(status: str) -> None:
-    """Render branded sidebar content."""
     logo_path = Path("assets/logo.png")
     if logo_path.exists():
         try:
@@ -139,8 +107,19 @@ def _render_sidebar(status: str) -> None:
     st.sidebar.markdown(
         "1. Fill complete project details.\n"
         "2. Click **Generate SEO Content**.\n"
-        "3. Review SEO score and refine if needed.\n"
+        "3. Review keyword scores and SEO strength.\n"
         "4. Download in TXT or Markdown."
+    )
+    st.sidebar.markdown("### Keyword Scoring Guide")
+    st.sidebar.markdown(
+        "**Score (1–100):** Relevance + search value.\n\n"
+        "🟢 **Low difficulty:** Long-tail, easy to rank — target first.\n\n"
+        "🟡 **Medium:** Competitive but winnable in 6–12 months.\n\n"
+        "🔴 **High:** Portal-dominated — use sparingly.\n\n"
+        "**Intent:**\n"
+        "- 🔵 Informational: Research phase\n"
+        "- 🟣 Commercial: Comparing options\n"
+        "- 🟢 Transactional: Ready to buy/visit"
     )
     st.sidebar.markdown("### About")
     st.sidebar.markdown(
@@ -153,10 +132,7 @@ def _render_sidebar(status: str) -> None:
     elif status == "missing":
         st.sidebar.warning(label)
         with st.sidebar.expander("Fix on Streamlit Cloud"):
-            st.code(
-                'GEMINI_API_KEY = "your_actual_gemini_api_key"',
-                language="toml",
-            )
+            st.code('GEMINI_API_KEY = "your_actual_gemini_api_key"', language="toml")
             st.caption("After saving secrets, reboot the app from Manage app.")
     else:
         st.sidebar.error(label)
@@ -165,7 +141,6 @@ def _render_sidebar(status: str) -> None:
 
 
 def _get_payload() -> Dict[str, object]:
-    """Render form and collect user payload."""
     with st.form("project_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
@@ -192,7 +167,7 @@ def _get_payload() -> Dict[str, object]:
 
         submitted = st.form_submit_button("Generate SEO Content", use_container_width=True)
 
-    payload = {
+    return {
         "project_name": project_name,
         "city": city,
         "micro_market": micro_market,
@@ -206,11 +181,94 @@ def _get_payload() -> Dict[str, object]:
         "tone": tone,
         "submitted": submitted,
     }
-    return payload
+
+
+def _score_bar_html(score: int) -> str:
+    """Render an inline score bar for the keyword table."""
+    if score >= 75:
+        color = "#16a34a"  # green
+    elif score >= 50:
+        color = "#d97706"  # amber
+    else:
+        color = "#dc2626"  # red
+
+    return (
+        f'<div class="score-bar-wrap">'
+        f'<div class="score-bar-bg"><div class="score-bar-fill" style="width:{score}%;background:{color};"></div></div>'
+        f'<span class="score-label">{score}</span>'
+        f'</div>'
+    )
+
+
+def _difficulty_badge(difficulty: str) -> str:
+    cls = {"Low": "badge-low", "Medium": "badge-medium", "High": "badge-high"}.get(difficulty, "badge-medium")
+    return f'<span class="badge {cls}">{difficulty}</span>'
+
+
+def _intent_badge(intent: str) -> str:
+    cls = {
+        "Informational": "badge intent-info",
+        "Commercial": "badge intent-comm",
+        "Transactional": "badge intent-trans",
+    }.get(intent, "badge intent-comm")
+    return f'<span class="{cls}">{intent}</span>'
+
+
+def _render_keyword_table(keywords: List[Dict[str, object]]) -> None:
+    """Render scored keyword table as HTML inside Streamlit."""
+    if not keywords:
+        st.write("No keywords generated.")
+        return
+
+    rows = ""
+    for i, kw in enumerate(keywords):
+        keyword = str(kw.get("keyword", ""))
+        score = int(kw.get("score", 50))
+        difficulty = str(kw.get("difficulty", "Medium"))
+        intent = str(kw.get("intent", "Commercial"))
+        suggestion = str(kw.get("suggestion", ""))
+
+        rows += (
+            f"<tr>"
+            f"<td><strong>{i + 1}</strong></td>"
+            f"<td>{keyword}</td>"
+            f"<td>{_score_bar_html(score)}</td>"
+            f"<td>{_difficulty_badge(difficulty)}</td>"
+            f"<td>{_intent_badge(intent)}</td>"
+            f"<td><span class='kw-suggestion'>💡 {suggestion}</span></td>"
+            f"</tr>"
+        )
+
+    table_html = f"""
+    <table class="kw-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Keyword</th>
+          <th>Score</th>
+          <th>Difficulty</th>
+          <th>Intent</th>
+          <th>Suggestion</th>
+        </tr>
+      </thead>
+      <tbody>{rows}</tbody>
+    </table>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
+
+    # Copy-friendly plain text block
+    st.markdown("<br>", unsafe_allow_html=True)
+    plain_lines = "\n".join(
+        [f"{i+1}. {kw.get('keyword','')}  |  Score: {kw.get('score','')}/100  |  "
+         f"{kw.get('difficulty','')}  |  {kw.get('intent','')}  |  {kw.get('suggestion','')}"
+         for i, kw in enumerate(keywords)]
+    )
+    with st.expander("📋 Copy-friendly keyword list", expanded=False):
+        st.code(plain_lines, language="text")
+        st.caption("Copy from the code block above.")
 
 
 def _render_content_card(title: str, value: str) -> None:
-    """Render one output card with expander and copy helper."""
     with st.expander(f"📌 {title}", expanded=True):
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         st.write(value)
@@ -220,17 +278,13 @@ def _render_content_card(title: str, value: str) -> None:
 
 
 def _render_list_card(title: str, items: List[str], ordered: bool = False) -> None:
-    """Render list output in premium card."""
     with st.expander(f"📌 {title}", expanded=True):
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
         if not items:
             st.write("No content generated.")
         else:
             for i, item in enumerate(items):
-                if ordered:
-                    st.write(f"{i + 1}. {item}")
-                else:
-                    st.write(f"- {item}")
+                st.write(f"{i + 1}. {item}" if ordered else f"- {item}")
         st.markdown("</div>", unsafe_allow_html=True)
         joined = "\n".join([f"{i+1}. {v}" if ordered else v for i, v in enumerate(items)])
         st.code(joined, language="text")
@@ -238,13 +292,15 @@ def _render_list_card(title: str, items: List[str], ordered: bool = False) -> No
 
 
 def _render_results(content: Dict[str, object]) -> None:
-    """Render full generated output section."""
     meta_description = str(content.get("meta_description", ""))
+    keywords: List[Dict[str, object]] = content.get("seo_keywords", [])  # type: ignore[assignment]
     quality = compute_quality_score(content)
     strength = str(quality["strength"])
     score = int(quality["score"])
 
     st.markdown("### Generated Content Pack")
+
+    # ── Quality metrics row ──
     m1, m2, m3 = st.columns([1, 1, 2])
     with m1:
         st.markdown(
@@ -269,9 +325,36 @@ def _render_results(content: Dict[str, object]) -> None:
             st.write(f"✅ {check}")
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # ── Keyword summary metrics ──
+    if keywords:
+        top = keywords[0]
+        avg_score = round(sum(int(k.get("score", 0)) for k in keywords) / len(keywords))
+        low_count = sum(1 for k in keywords if k.get("difficulty") == "Low")
+        trans_count = sum(1 for k in keywords if k.get("intent") == "Transactional")
+
+        km1, km2, km3, km4 = st.columns(4)
+        with km1:
+            st.metric("Top Keyword Score", f"{top.get('score', 0)}/100")
+        with km2:
+            st.metric("Avg Keyword Score", f"{avg_score}/100")
+        with km3:
+            st.metric("Low Difficulty Keywords", f"{low_count} / {len(keywords)}")
+        with km4:
+            st.metric("Transactional Intent", f"{trans_count} / {len(keywords)}")
+
+    # ── SEO Keywords table ──
+    with st.expander("📌 SEO Keywords — Scored & Ranked", expanded=True):
+        st.markdown(
+            "<small>Sorted highest score first. "
+            "🟢 Low difficulty = target first. "
+            "🟢 Transactional intent = highest buyer readiness.</small>",
+            unsafe_allow_html=True,
+        )
+        _render_keyword_table(keywords)
+
+    # ── Remaining content ──
     _render_content_card("SEO Title", str(content.get("seo_title", "")))
     _render_content_card("Meta Description", meta_description)
-    _render_list_card("SEO Keywords", list(content.get("seo_keywords", [])))
     _render_content_card("Google Search Snippet", str(content.get("google_snippet", "")))
     _render_content_card("Instagram Caption", str(content.get("instagram_caption", "")))
     _render_content_card("LinkedIn Caption", str(content.get("linkedin_caption", "")))
@@ -280,6 +363,7 @@ def _render_results(content: Dict[str, object]) -> None:
     _render_content_card("Short Project Description", str(content.get("short_description", "")))
     _render_content_card("Long-form Project Overview", str(content.get("long_form_overview", "")))
 
+    # ── Downloads ──
     markdown_data = format_output_markdown(content)
     txt_data = format_output_txt(content)
     d1, d2 = st.columns(2)
@@ -302,7 +386,6 @@ def _render_results(content: Dict[str, object]) -> None:
 
 
 def main() -> None:
-    """Run Streamlit app."""
     configure_runtime_secrets()
     st.set_page_config(
         page_title="AI Real Estate SEO Generator",
@@ -347,7 +430,7 @@ def main() -> None:
                     except AIGenerationError as exc:
                         st.session_state["last_error"] = str(exc)
                         st.error(str(exc))
-                    except Exception as exc:  # pragma: no cover
+                    except Exception as exc:
                         st.session_state["last_error"] = f"Unexpected app error: {exc}"
                         st.error(st.session_state["last_error"])
 
