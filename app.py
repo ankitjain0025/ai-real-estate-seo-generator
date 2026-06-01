@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 _ROOT_DIR = Path(__file__).resolve().parent
 if str(_ROOT_DIR) not in sys.path:
@@ -15,6 +15,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from utils.ai_generator import AIGenerationError, generate_seo_content, get_client
+from utils.auth import is_authenticated, render_login, render_logout
 from utils.config import configure_runtime_secrets, get_gemini_api_key
 from utils.formatting import format_output_markdown, format_output_txt
 from utils.scoring import compute_quality_score
@@ -23,21 +24,23 @@ from utils.validation import validate_inputs
 
 load_dotenv()
 
+# ── Constants ────────────────────────────────────────────────────────────────
 CITY_OPTIONS = [
     "Mumbai", "Thane", "Navi Mumbai", "Pune", "Bangalore",
     "Hyderabad", "Chennai", "Delhi NCR", "Ahmedabad",
 ]
-PROJECT_TYPE_OPTIONS = ["Residential", "Commercial", "Mixed Use", "Retail", "Township"]
-CONFIG_OPTIONS = ["Studio", "1BHK", "2BHK", "3BHK", "4BHK", "Penthouse", "Office", "Retail Shop"]
+PROJECT_TYPE_OPTIONS  = ["Residential", "Commercial", "Mixed Use", "Retail", "Township"]
+CONFIG_OPTIONS        = ["Studio", "1BHK", "2BHK", "3BHK", "4BHK", "Penthouse", "Office", "Retail Shop"]
 BRAND_POSITION_OPTIONS = [
     "Luxury", "Ultra Luxury", "Affordable Premium", "Family-Centric",
     "Investor-Focused", "Smart Living", "Corporate Commercial",
 ]
 TARGET_AUDIENCE_OPTIONS = ["Families", "Investors", "Working Professionals", "NRIs", "Millennials", "Businesses"]
-PRICE_SEGMENT_OPTIONS = ["Affordable", "Mid Segment", "Premium", "Luxury", "Ultra Luxury"]
-TONE_OPTIONS = ["Premium", "Luxury", "Modern", "Aspirational", "Corporate", "Investor-focused"]
+PRICE_SEGMENT_OPTIONS   = ["Affordable", "Mid Segment", "Premium", "Luxury", "Ultra Luxury"]
+TONE_OPTIONS            = ["Premium", "Luxury", "Modern", "Aspirational", "Corporate", "Investor-focused"]
 
 
+# ── Session state ────────────────────────────────────────────────────────────
 def _init_state() -> None:
     defaults = {
         "generated": None,
@@ -50,27 +53,24 @@ def _init_state() -> None:
             st.session_state[key] = value
 
 
+# ── API helpers ──────────────────────────────────────────────────────────────
 def _api_status() -> str:
     configure_runtime_secrets()
-    key = get_gemini_api_key()
-    if not key:
+    if not get_gemini_api_key():
         return "missing"
     try:
-        _ = get_client()
+        get_client()
         return "connected"
-    except AIGenerationError:
-        return "invalid"
     except Exception:
         return "invalid"
 
 
 def _api_status_message(status: str) -> str:
-    mapping = {
+    return {
         "connected": "Connected",
-        "missing": "Not Connected (missing GEMINI_API_KEY)",
-        "invalid": "Configuration Error (check API key value)",
-    }
-    return mapping.get(status, "Unknown")
+        "missing":   "Not Connected (missing GEMINI_API_KEY)",
+        "invalid":   "Configuration Error (check API key value)",
+    }.get(status, "Unknown")
 
 
 def _api_error_message(status: str) -> str:
@@ -88,7 +88,37 @@ def _api_error_message(status: str) -> str:
     return "API is not connected. Please configure GEMINI_API_KEY and try again."
 
 
-def _render_sidebar(status: str) -> None:
+# ── Login page ───────────────────────────────────────────────────────────────
+def _render_login_page() -> None:
+    """Full-page centred login UI."""
+    st.markdown(
+        """
+        <div class="login-wrapper">
+            <div class="login-logo">🏙️</div>
+            <div class="login-title">RealSEO AI</div>
+            <div class="login-sub">AI-powered SEO for Indian Real Estate</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    _, centre, _ = st.columns([1, 2, 1])
+    with centre:
+        name, auth_status, username = render_login()
+
+        if auth_status is False and st.session_state.get("authentication_status") is False:
+            st.error("Incorrect username or password. Please try again.")
+        elif auth_status is None:
+            st.info("Please enter your credentials to continue.")
+
+    st.markdown(
+        '<div class="login-footer">© RealSEO AI · Powered by Google Gemini</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+def _render_sidebar(status: str, username: Optional[str]) -> None:
     logo_path = Path("assets/logo.png")
     if logo_path.exists():
         try:
@@ -100,9 +130,15 @@ def _render_sidebar(status: str) -> None:
 
     st.sidebar.markdown("## Real Estate AI SEO Generator")
     st.sidebar.markdown(
-        "Premium launch content engine for Indian real estate developers, channel partners, and marketing teams."
+        "Premium launch content engine for Indian real estate developers, "
+        "channel partners, and marketing teams."
     )
     st.sidebar.markdown("---")
+
+    # User info + logout
+    render_logout(username)
+    st.sidebar.markdown("---")
+
     st.sidebar.markdown("### How to use")
     st.sidebar.markdown(
         "1. Fill complete project details.\n"
@@ -123,7 +159,8 @@ def _render_sidebar(status: str) -> None:
     )
     st.sidebar.markdown("### About")
     st.sidebar.markdown(
-        "Built with Streamlit + Google Gemini for high-quality SEO and social launch communication at scale."
+        "Built with Streamlit + Google Gemini for high-quality SEO "
+        "and social launch communication at scale."
     )
     st.sidebar.markdown("### API Status")
     label = _api_status_message(status)
@@ -140,15 +177,16 @@ def _render_sidebar(status: str) -> None:
     st.sidebar.caption("Powered by Google Gemini 2.5 Flash | Built for Indian Real Estate")
 
 
+# ── Input form ───────────────────────────────────────────────────────────────
 def _get_payload() -> Dict[str, object]:
     with st.form("project_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
-            project_name = st.text_input("Project Name", placeholder="e.g., The Crest at Powai")
-            city = st.selectbox("City", CITY_OPTIONS)
-            micro_market = st.text_input("Micro Market", placeholder="e.g., Powai, Whitefield, Hinjewadi")
-            project_type = st.selectbox("Project Type", PROJECT_TYPE_OPTIONS)
-            configuration = st.multiselect("Configuration", CONFIG_OPTIONS)
+            project_name    = st.text_input("Project Name", placeholder="e.g., The Crest at Powai")
+            city            = st.selectbox("City", CITY_OPTIONS)
+            micro_market    = st.text_input("Micro Market", placeholder="e.g., Powai, Whitefield, Hinjewadi")
+            project_type    = st.selectbox("Project Type", PROJECT_TYPE_OPTIONS)
+            configuration   = st.multiselect("Configuration", CONFIG_OPTIONS)
             nearby_landmarks = st.text_area(
                 "Nearby Landmarks",
                 placeholder="e.g., 5 mins from Metro Station, near IT Park, close to top schools and hospitals",
@@ -162,41 +200,28 @@ def _get_payload() -> Dict[str, object]:
                 height=110,
             )
             target_audience = st.multiselect("Target Audience", TARGET_AUDIENCE_OPTIONS)
-            price_segment = st.selectbox("Price Segment", PRICE_SEGMENT_OPTIONS)
-            tone = st.selectbox("Tone of Content", TONE_OPTIONS)
+            price_segment   = st.selectbox("Price Segment", PRICE_SEGMENT_OPTIONS)
+            tone            = st.selectbox("Tone of Content", TONE_OPTIONS)
 
         submitted = st.form_submit_button("Generate SEO Content", use_container_width=True)
 
     return {
-        "project_name": project_name,
-        "city": city,
-        "micro_market": micro_market,
-        "project_type": project_type,
-        "configuration": configuration,
-        "nearby_landmarks": nearby_landmarks,
-        "brand_positioning": brand_positioning,
-        "usp": usp,
-        "target_audience": target_audience,
-        "price_segment": price_segment,
-        "tone": tone,
-        "submitted": submitted,
+        "project_name": project_name, "city": city, "micro_market": micro_market,
+        "project_type": project_type, "configuration": configuration,
+        "nearby_landmarks": nearby_landmarks, "brand_positioning": brand_positioning,
+        "usp": usp, "target_audience": target_audience, "price_segment": price_segment,
+        "tone": tone, "submitted": submitted,
     }
 
 
+# ── Keyword table ────────────────────────────────────────────────────────────
 def _score_bar_html(score: int) -> str:
-    """Render an inline score bar for the keyword table."""
-    if score >= 75:
-        color = "#16a34a"  # green
-    elif score >= 50:
-        color = "#d97706"  # amber
-    else:
-        color = "#dc2626"  # red
-
+    color = "#16a34a" if score >= 75 else "#d97706" if score >= 50 else "#dc2626"
     return (
         f'<div class="score-bar-wrap">'
-        f'<div class="score-bar-bg"><div class="score-bar-fill" style="width:{score}%;background:{color};"></div></div>'
-        f'<span class="score-label">{score}</span>'
-        f'</div>'
+        f'<div class="score-bar-bg"><div class="score-bar-fill" '
+        f'style="width:{score}%;background:{color};"></div></div>'
+        f'<span class="score-label">{score}</span></div>'
     )
 
 
@@ -208,66 +233,50 @@ def _difficulty_badge(difficulty: str) -> str:
 def _intent_badge(intent: str) -> str:
     cls = {
         "Informational": "badge intent-info",
-        "Commercial": "badge intent-comm",
+        "Commercial":    "badge intent-comm",
         "Transactional": "badge intent-trans",
     }.get(intent, "badge intent-comm")
     return f'<span class="{cls}">{intent}</span>'
 
 
 def _render_keyword_table(keywords: List[Dict[str, object]]) -> None:
-    """Render scored keyword table as HTML inside Streamlit."""
     if not keywords:
         st.write("No keywords generated.")
         return
 
     rows = ""
     for i, kw in enumerate(keywords):
-        keyword = str(kw.get("keyword", ""))
-        score = int(kw.get("score", 50))
-        difficulty = str(kw.get("difficulty", "Medium"))
-        intent = str(kw.get("intent", "Commercial"))
-        suggestion = str(kw.get("suggestion", ""))
-
         rows += (
             f"<tr>"
-            f"<td><strong>{i + 1}</strong></td>"
-            f"<td>{keyword}</td>"
-            f"<td>{_score_bar_html(score)}</td>"
-            f"<td>{_difficulty_badge(difficulty)}</td>"
-            f"<td>{_intent_badge(intent)}</td>"
-            f"<td><span class='kw-suggestion'>💡 {suggestion}</span></td>"
+            f"<td><strong>{i+1}</strong></td>"
+            f"<td>{kw.get('keyword','')}</td>"
+            f"<td>{_score_bar_html(int(kw.get('score', 50)))}</td>"
+            f"<td>{_difficulty_badge(str(kw.get('difficulty','Medium')))}</td>"
+            f"<td>{_intent_badge(str(kw.get('intent','Commercial')))}</td>"
+            f"<td><span class='kw-suggestion'>💡 {kw.get('suggestion','')}</span></td>"
             f"</tr>"
         )
 
-    table_html = f"""
-    <table class="kw-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Keyword</th>
-          <th>Score</th>
-          <th>Difficulty</th>
-          <th>Intent</th>
-          <th>Suggestion</th>
-        </tr>
-      </thead>
-      <tbody>{rows}</tbody>
-    </table>
-    """
-    st.markdown(table_html, unsafe_allow_html=True)
-
-    # Copy-friendly plain text block
+    st.markdown(
+        f'<table class="kw-table"><thead><tr>'
+        f'<th>#</th><th>Keyword</th><th>Score</th>'
+        f'<th>Difficulty</th><th>Intent</th><th>Suggestion</th>'
+        f'</tr></thead><tbody>{rows}</tbody></table>',
+        unsafe_allow_html=True,
+    )
     st.markdown("<br>", unsafe_allow_html=True)
-    plain_lines = "\n".join(
-        [f"{i+1}. {kw.get('keyword','')}  |  Score: {kw.get('score','')}/100  |  "
-         f"{kw.get('difficulty','')}  |  {kw.get('intent','')}  |  {kw.get('suggestion','')}"
-         for i, kw in enumerate(keywords)]
+
+    plain = "\n".join(
+        f"{i+1}. {kw.get('keyword','')}  |  Score: {kw.get('score','')}/100  |  "
+        f"{kw.get('difficulty','')}  |  {kw.get('intent','')}  |  {kw.get('suggestion','')}"
+        for i, kw in enumerate(keywords)
     )
     with st.expander("📋 Copy-friendly keyword list", expanded=False):
-        st.code(plain_lines, language="text")
+        st.code(plain, language="text")
         st.caption("Copy from the code block above.")
 
 
+# ── Content cards ────────────────────────────────────────────────────────────
 def _render_content_card(title: str, value: str) -> None:
     with st.expander(f"📌 {title}", expanded=True):
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
@@ -284,23 +293,24 @@ def _render_list_card(title: str, items: List[str], ordered: bool = False) -> No
             st.write("No content generated.")
         else:
             for i, item in enumerate(items):
-                st.write(f"{i + 1}. {item}" if ordered else f"- {item}")
+                st.write(f"{i+1}. {item}" if ordered else f"- {item}")
         st.markdown("</div>", unsafe_allow_html=True)
         joined = "\n".join([f"{i+1}. {v}" if ordered else v for i, v in enumerate(items)])
         st.code(joined, language="text")
         st.caption("Copy from the code block above.")
 
 
+# ── Results renderer ─────────────────────────────────────────────────────────
 def _render_results(content: Dict[str, object]) -> None:
-    meta_description = str(content.get("meta_description", ""))
-    keywords: List[Dict[str, object]] = content.get("seo_keywords", [])  # type: ignore[assignment]
-    quality = compute_quality_score(content)
-    strength = str(quality["strength"])
-    score = int(quality["score"])
+    meta        = str(content.get("meta_description", ""))
+    keywords: List[Dict[str, object]] = content.get("seo_keywords", [])  # type: ignore
+    quality     = compute_quality_score(content)
+    score       = int(quality["score"])
+    strength    = str(quality["strength"])
 
     st.markdown("### Generated Content Pack")
 
-    # ── Quality metrics row ──
+    # Quality metrics
     m1, m2, m3 = st.columns([1, 1, 2])
     with m1:
         st.markdown(
@@ -309,40 +319,33 @@ def _render_results(content: Dict[str, object]) -> None:
             unsafe_allow_html=True,
         )
     with m2:
-        css_class = (
-            "seo-indicator-good" if score >= 70 else "seo-indicator-mid" if score >= 50 else "seo-indicator-low"
-        )
+        css = "seo-indicator-good" if score >= 70 else "seo-indicator-mid" if score >= 50 else "seo-indicator-low"
         st.markdown(
             f'<div class="metric-card"><div class="small-label">SEO Strength</div>'
-            f'<div class="big-value {css_class}">{strength}</div></div>',
+            f'<div class="big-value {css}">{strength}</div></div>',
             unsafe_allow_html=True,
         )
     with m3:
         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-        st.write(f"Meta Description Length: **{len(meta_description)}** characters")
+        st.write(f"Meta Description Length: **{len(meta)}** characters")
         st.progress(min(score, 100))
         for check in quality["checks"]:
             st.write(f"✅ {check}")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Keyword summary metrics ──
+    # Keyword summary metrics
     if keywords:
-        top = keywords[0]
-        avg_score = round(sum(int(k.get("score", 0)) for k in keywords) / len(keywords))
-        low_count = sum(1 for k in keywords if k.get("difficulty") == "Low")
-        trans_count = sum(1 for k in keywords if k.get("intent") == "Transactional")
-
+        top      = keywords[0]
+        avg      = round(sum(int(k.get("score", 0)) for k in keywords) / len(keywords))
+        low_c    = sum(1 for k in keywords if k.get("difficulty") == "Low")
+        trans_c  = sum(1 for k in keywords if k.get("intent") == "Transactional")
         km1, km2, km3, km4 = st.columns(4)
-        with km1:
-            st.metric("Top Keyword Score", f"{top.get('score', 0)}/100")
-        with km2:
-            st.metric("Avg Keyword Score", f"{avg_score}/100")
-        with km3:
-            st.metric("Low Difficulty Keywords", f"{low_count} / {len(keywords)}")
-        with km4:
-            st.metric("Transactional Intent", f"{trans_count} / {len(keywords)}")
+        with km1: st.metric("Top Keyword Score",      f"{top.get('score', 0)}/100")
+        with km2: st.metric("Avg Keyword Score",      f"{avg}/100")
+        with km3: st.metric("Low Difficulty Keywords", f"{low_c} / {len(keywords)}")
+        with km4: st.metric("Transactional Intent",   f"{trans_c} / {len(keywords)}")
 
-    # ── SEO Keywords table ──
+    # Keyword table
     with st.expander("📌 SEO Keywords — Scored & Ranked", expanded=True):
         st.markdown(
             "<small>Sorted highest score first. "
@@ -352,43 +355,36 @@ def _render_results(content: Dict[str, object]) -> None:
         )
         _render_keyword_table(keywords)
 
-    # ── Remaining content ──
-    _render_content_card("SEO Title", str(content.get("seo_title", "")))
-    _render_content_card("Meta Description", meta_description)
-    _render_content_card("Google Search Snippet", str(content.get("google_snippet", "")))
-    _render_content_card("Instagram Caption", str(content.get("instagram_caption", "")))
-    _render_content_card("LinkedIn Caption", str(content.get("linkedin_caption", "")))
-    _render_list_card("25 SEO Hashtags", list(content.get("seo_hashtags", [])))
-    _render_list_card("10 Blog Topic Ideas", list(content.get("blog_topics", [])), ordered=True)
-    _render_content_card("Short Project Description", str(content.get("short_description", "")))
-    _render_content_card("Long-form Project Overview", str(content.get("long_form_overview", "")))
+    _render_content_card("SEO Title",              str(content.get("seo_title", "")))
+    _render_content_card("Meta Description",        meta)
+    _render_content_card("Google Search Snippet",   str(content.get("google_snippet", "")))
+    _render_content_card("Instagram Caption",       str(content.get("instagram_caption", "")))
+    _render_content_card("LinkedIn Caption",        str(content.get("linkedin_caption", "")))
+    _render_list_card("25 SEO Hashtags",            list(content.get("seo_hashtags", [])))
+    _render_list_card("10 Blog Topic Ideas",        list(content.get("blog_topics", [])), ordered=True)
+    _render_content_card("Short Project Description",   str(content.get("short_description", "")))
+    _render_content_card("Long-form Project Overview",  str(content.get("long_form_overview", "")))
 
-    # ── Downloads ──
-    markdown_data = format_output_markdown(content)
-    txt_data = format_output_txt(content)
     d1, d2 = st.columns(2)
     with d1:
         st.download_button(
-            "Download as TXT",
-            data=txt_data,
-            file_name="real_estate_seo_content.txt",
-            mime="text/plain",
+            "Download as TXT", data=format_output_txt(content),
+            file_name="real_estate_seo_content.txt", mime="text/plain",
             use_container_width=True,
         )
     with d2:
         st.download_button(
-            "Download as Markdown",
-            data=markdown_data,
-            file_name="real_estate_seo_content.md",
-            mime="text/markdown",
+            "Download as Markdown", data=format_output_markdown(content),
+            file_name="real_estate_seo_content.md", mime="text/markdown",
             use_container_width=True,
         )
 
 
+# ── Main ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     configure_runtime_secrets()
     st.set_page_config(
-        page_title="AI Real Estate SEO Generator",
+        page_title="RealSEO AI",
         page_icon="🏙️",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -396,6 +392,15 @@ def main() -> None:
     st.markdown(get_custom_css(), unsafe_allow_html=True)
     _init_state()
 
+    # ── Authentication gate ──────────────────────────────────────────────────
+    if not is_authenticated():
+        _render_login_page()
+        st.stop()
+
+    # ── Authenticated — get username from session state ──────────────────────
+    username: Optional[str] = st.session_state.get("username")
+
+    # ── Main app ─────────────────────────────────────────────────────────────
     st.markdown('<div class="main-title">AI-Powered Real Estate SEO Generator</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="sub-title">Generate premium launch content for Indian real estate projects in seconds.</div>',
@@ -403,7 +408,7 @@ def main() -> None:
     )
 
     api_status = _api_status()
-    _render_sidebar(api_status)
+    _render_sidebar(api_status, username)
 
     left_col, right_col = st.columns([1.25, 1], gap="large")
 
@@ -422,9 +427,9 @@ def main() -> None:
                 with st.spinner("Crafting premium SEO content with Gemini AI..."):
                     try:
                         generated = generate_seo_content(payload)
-                        st.session_state["generated"] = generated
-                        st.session_state["last_payload"] = payload
-                        st.session_state["last_error"] = ""
+                        st.session_state["generated"]         = generated
+                        st.session_state["last_payload"]      = payload
+                        st.session_state["last_error"]        = ""
                         st.session_state["last_generated_at"] = datetime.now().strftime("%d %b %Y, %I:%M %p")
                         st.success("SEO content generated successfully.")
                     except AIGenerationError as exc:
